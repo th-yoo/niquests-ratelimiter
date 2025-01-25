@@ -1,3 +1,6 @@
+# https://gist.github.com/justinvanwinkle/d9f04950083c4554835c1a35f9d22dad
+
+from abc import ABC, abstractmethod
 from fractions import Fraction
 from inspect import signature
 from logging import getLogger
@@ -8,17 +11,17 @@ from uuid import uuid4
 
 from pyrate_limiter import Duration, Limiter, RequestRate
 from pyrate_limiter.bucket import AbstractBucket, MemoryListBucket, MemoryQueueBucket
-from requests import PreparedRequest, Response, Session
-from requests.adapters import HTTPAdapter
+from niquests import PreparedRequest, Response, Session
+from niquests.adapters import HTTPAdapter, AsyncHTTPAdapter
 
-if TYPE_CHECKING:
-    MIXIN_BASE = Session
-else:
-    MIXIN_BASE = object
+#if TYPE_CHECKING:
+#    MIXIN_BASE = Session
+#else:
+#    MIXIN_BASE = object
 logger = getLogger(__name__)
 
 
-class LimiterMixin(MIXIN_BASE):
+class LimiterBase(ABC):
     """Mixin class that adds rate-limiting behavior to requests.
 
     See :py:class:`.LimiterSession` for parameter details.
@@ -81,21 +84,21 @@ class LimiterMixin(MIXIN_BASE):
         super().__init__(**session_kwargs)  # type: ignore  # Base Session doesn't take any kwargs
 
     # Conveniently, both Session.send() and HTTPAdapter.send() have a mostly consistent signature
-    def send(self, request: PreparedRequest, **kwargs) -> Response:
-        """Send a request with rate-limiting.
-
-        Raises:
-            :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
-        """
-        with self.limiter.ratelimit(
-            self._bucket_name(request),
-            delay=True,
-            max_delay=self.max_delay,
-        ):
-            response = super().send(request, **kwargs)
-            if response.status_code in self.limit_statuses:
-                self._fill_bucket(request)
-            return response
+#    def send(self, request: PreparedRequest, **kwargs) -> Response:
+#        """Send a request with rate-limiting.
+#
+#        Raises:
+#            :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
+#        """
+#        with self.limiter.ratelimit(
+#            self._bucket_name(request),
+#            delay=True,
+#            max_delay=self.max_delay,
+#        ):
+#            response = super().send(request, **kwargs)
+#            if response.status_code in self.limit_statuses:
+#                self._fill_bucket(request)
+#            return response
 
     def _bucket_name(self, request):
         """Get a bucket name for the given request"""
@@ -136,6 +139,23 @@ class LimiterMixin(MIXIN_BASE):
         # Add "filler" requests to reach the limit for that interval
         for _ in range(rate.limit - item_count):
             bucket.put(now)
+
+class LimiterMixin(LimiterBase):
+    def send(self, request: PreparedRequest, **kwargs) -> Response:
+        """Send a request with rate-limiting.
+
+        Raises:
+            :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
+        """
+        with self.limiter.ratelimit(
+            self._bucket_name(request),
+            delay=True,
+            max_delay=self.max_delay,
+        ):
+            response = super().send(request, **kwargs)
+            if response.status_code in self.limit_statuses:
+                self._fill_bucket(request)
+            return response
 
 
 class LimiterSession(LimiterMixin, Session):
@@ -198,3 +218,88 @@ def _get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:
     """Get the subset of non-None ``kwargs`` that are valid params for ``func``"""
     sig_params = list(signature(func).parameters)
     return {k: v for k, v in kwargs.items() if k in sig_params and v is not None}
+
+#class AsyncLimiterMixin(LimiterMixin):
+#    def __init__(
+#        self,
+#        per_second: float = 0,
+#        per_minute: float = 0,
+#        per_hour: float = 0,
+#        per_day: float = 0,
+#        per_month: float = 0,
+#        burst: float = 1,
+#        bucket_class: Type[AbstractBucket] = MemoryListBucket,
+#        bucket_kwargs: Optional[Dict] = None,
+#        time_function: Optional[Callable[..., float]] = None,
+#        limiter: Optional[Limiter] = None,
+#        max_delay: Union[int, float, None] = None,
+#        per_host: bool = True,
+#        limit_statuses: Iterable[int] = (429,),
+#        bucket_name: Optional[str] = None,
+#        **kwargs,
+#    ):
+#        super().__init__(
+#            per_second=per_second,
+#            per_minute=per_minute,
+#            per_hour=per_hour,
+#            per_day=per_day,
+#            per_month=per_month,
+#            burst=burst,
+#            bucket_class=bucket_class,
+#            bucket_kwargs=bucket_kwargs,
+#            time_function=time_function,
+#            limiter=limiter,
+#            max_delay=max_delay,
+#            per_host=per_host,
+#            limit_statuses=limit_statuses,
+#            bucket_name=bucket_name,
+#            **kwargs
+#        )
+#
+#    # Conveniently, both Session.send() and HTTPAdapter.send() have a mostly consistent signature
+#    async def send(self, request: PreparedRequest, **kwargs) -> Response:
+#        """Send a request with rate-limiting.
+#
+#        Raises:
+#            :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
+#        """
+#        async with self.limiter.ratelimit(
+#            self._bucket_name(request),
+#            delay=True,
+#            max_delay=self.max_delay,
+#        ):
+#            #response = await super().send(request, **kwargs)
+#            response = await AsyncHTTPAdapter.send(self, request, **kwargs)
+#            if response.status_code in self.limit_statuses:
+#                self._fill_bucket(request)
+#            return response
+
+class AsyncLimiterMixin(LimiterBase):
+    async def send(self, request: PreparedRequest, **kwargs) -> Response:
+        """Send a request with rate-limiting.
+
+        Raises:
+            :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
+        """
+        async with self.limiter.ratelimit(
+            self._bucket_name(request),
+            delay=True,
+            max_delay=self.max_delay,
+        ):
+            response = await super().send(request, **kwargs)
+            #response = await AsyncHTTPAdapter.send(self, request, **kwargs)
+            if response.status_code in self.limit_statuses:
+                self._fill_bucket(request)
+            return response
+
+class AsyncLimiterAdapter(AsyncLimiterMixin, AsyncHTTPAdapter):  # type: ignore  # send signature accepts **kwargs
+    """`Transport adapter
+    <https://requests.readthedocs.io/en/latest/user/advanced/#transport-adapters>`_
+    that adds rate-limiting behavior to requests.
+
+    See :py:class:`.LimiterSession` for parameter details.
+    """
+
+
+if __name__ == '__main__':
+    pass

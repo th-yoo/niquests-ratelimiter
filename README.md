@@ -1,4 +1,4 @@
-# Requests-Ratelimiter
+# Niquests-Ratelimiter
 [![Build
 status](https://github.com/JWCook/requests-ratelimiter/workflows/Build/badge.svg)](https://github.com/JWCook/requests-ratelimiter/actions)
 [![Codecov](https://codecov.io/gh/JWCook/requests-ratelimiter/branch/main/graph/badge.svg)](https://codecov.io/gh/JWCook/requests-ratelimiter)
@@ -9,7 +9,7 @@ status](https://github.com/JWCook/requests-ratelimiter/workflows/Build/badge.svg
 [![PyPI - Format](https://img.shields.io/pypi/format/requests-ratelimiter?color=blue)](https://pypi.org/project/requests-ratelimiter)
 
 This package is a simple wrapper around [pyrate-limiter v2](https://github.com/vutran1710/PyrateLimiter/tree/v2.10.0)
-that adds convenient integration with the [requests](https://requests.readthedocs.io) library.
+that adds convenient integration with the [niquests](https://niquests.readthedocs.io) library.
 
 Full project documentation can be found at [requests-ratelimiter.readthedocs.io](https://requests-ratelimiter.readthedocs.io).
 
@@ -18,8 +18,8 @@ Full project documentation can be found at [requests-ratelimiter.readthedocs.io]
 * `pyrate-limiter` is a general-purpose rate-limiting library that implements the leaky bucket
   algorithm, supports multiple rate limits, and has optional persistence with SQLite and Redis
   backends
-* `requests-ratelimiter` adds some conveniences for sending rate-limited HTTP requests with the
-  `requests` library
+* `niquests-ratelimiter` adds some conveniences for sending rate-limited HTTP requests with the
+  `niquests` library
 * It can be used as either a
   [session](https://requests.readthedocs.io/en/latest/user/advanced/#session-objects) or a
   [transport adapter](https://requests.readthedocs.io/en/latest/user/advanced/#transport-adapters)
@@ -29,13 +29,14 @@ Full project documentation can be found at [requests-ratelimiter.readthedocs.io]
 
 # Installation
 ```
-pip install requests-ratelimiter
+# not yet published
+pip install niquests-ratelimiter
 ```
 
 # Usage
 
 ## Usage Options
-There are three ways to use `requests-ratelimiter`:
+There are three ways to use `niquests-ratelimiter`:
 
 ### Session
 The simplest option is
@@ -87,8 +88,8 @@ is available to be used as a
 
 Example:
 ```python
-from requests import Session
-from requests_ratelimiter import LimiterAdapter
+from niquests import Session
+from niquests_ratelimiter import LimiterAdapter
 
 session = Session()
 
@@ -101,6 +102,33 @@ session.mount('https://', adapter)
 for user_id in range(100):
     response = session.get(f'https://api.some_site.com/v1/users/{user_id}')
     print(response.json())
+```
+
+Asyncio Example:
+```python
+import asyncio
+from time import time
+from niquests import AsyncSession
+from niquests_ratelimiter import AsyncLimiterAdapter
+
+session = AsyncSession()
+
+# Apply a rate-limit (5 requests per second) to all requests
+adapter = AsyncLimiterAdapter(per_second=5)
+session.mount('http://', adapter)
+session.mount('https://', adapter)
+
+async def main():
+    # Send rate-limited requests
+    async def fetch(i):
+        response = await session.get('https://www.naver.com')
+        print(f'[t+{time()-start:.2f}] Sent request {i+1}')
+
+    await asyncio.gather(*[fetch(i) for i in range(20)])
+
+
+asyncio.run(main())
+
 ```
 
 ### Mixin

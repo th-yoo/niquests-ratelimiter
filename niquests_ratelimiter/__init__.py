@@ -1,7 +1,7 @@
 # ruff: noqa: F401,F403,F405
 from pyrate_limiter import *
 
-from .requests_ratelimiter import *
+from .niquests_ratelimiter import *
 
 __all__ = [
     # requests-ratelimiter main classes
